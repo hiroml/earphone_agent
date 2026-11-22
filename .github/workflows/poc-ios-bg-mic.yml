@@ -1,0 +1,71 @@
+# PoC: iOS バックグラウンド BT マイク検証アプリを macOS ランナーでビルドし、
+# 未署名 IPA を成果物として出力する。Windows 側で Sideloadly 等により署名・インストールする。
+name: PoC iOS bg-mic (unsigned IPA)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "poc/ios-bg-mic/**"
+      - ".github/workflows/poc-ios-bg-mic.yml"
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: poc/ios-bg-mic
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select latest stable Xcode
+        run: |
+          ls -d /Applications/Xcode*.app
+          XCODE=$(ls -d /Applications/Xcode_*.app | grep -vi beta | sort -V | tail -1)
+          echo "Using $XCODE"
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build (unsigned)
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project BgMicPoC.xcodeproj \
+            -scheme BgMicPoC \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build | tee xcodebuild.log
+
+      - name: Package IPA
+        run: |
+          rm -rf Payload
+          mkdir Payload
+          cp -R build/Build/Products/Release-iphoneos/BgMicPoC.app Payload/
+          zip -qry BgMicPoC-unsigned.ipa Payload
+          ls -la BgMicPoC-unsigned.ipa
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: BgMicPoC-unsigned-ipa
+          path: poc/ios-bg-mic/BgMicPoC-unsigned.ipa
+          retention-days: 14
+
+      - name: Upload build log (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-log
+          path: poc/ios-bg-mic/xcodebuild.log

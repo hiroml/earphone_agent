@@ -1,0 +1,49 @@
+# Claude Code（個人設定）
+CLAUDE.local.md
+.claude/settings.local.json
+
+# 秘密情報
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+google-services.json
+GoogleService-Info.plist
+
+# 音声・録音データ（誤コミット防止）
+*.wav
+*.m4a
+*.mp3
+*.flac
+*.opus
+recordings/
+samples/private/
+
+# OS / エディタ
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# 依存・ビルド成果物（スタック決定後に調整）
+node_modules/
+build/
+dist/
+.expo/
+.dart_tool/
+Pods/
+*.apk
+*.aab
+*.ipa
+__pycache__/
+.venv/
+
+# iOS PoC（XcodeGen 生成物・ビルド成果物・実機ログ）
+poc/**/*.xcodeproj/
+poc/**/Support/Info.plist
+poc/**/build/
+poc/**/Payload/
+poc/**/*.ipa
+poc/**/results/
