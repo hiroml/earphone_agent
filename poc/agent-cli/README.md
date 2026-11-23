@@ -12,7 +12,15 @@ iOS の音声認識・話者判別とは独立して開発し、後で統合す�
 | 送信ゲート | **本人の発話（`Speaker.SELF`）だけ** を API に送る。他人・不明は送らない（[ADR-0002](../../docs/adr/0002-send-only-own-voice-to-cloud.md)） |
 | 会話文脈 | 履歴をそのまま保持（`/reset` で消去） |
 
-モデル: `claude-opus-5-5`（effort は既定 `medium`、`--effort` で変更）。拒否時のサーバー側フォールバック（`fallbacks: "default"`）を有効化している。
+## LLM の切り替え（`--provider`）
+| provider | モデル | 調査（Web 検索） | ToDo | 備考 |
+|---|---|---|---|---|
+| `claude`（既定） | `claude-opus-5-5` | ✅ | ✅ | effort は既定 `medium`。拒否時のサーバー側フォールバックを有効化 |
+| `sarashina` | `sarashina3.2-mini-thinking`（既定）など | ❌ | ✅ | 日本語特化（SB Intuitions）。`--model` で変更、`--effort` は low/medium/high |
+
+- Sarashina のモデル: `sarashina3.2-mini-thinking`（推論）/ `sarashina3-nano`（軽量・高速）/ `sarashina3-mini`（2026-11-27 以降に提供終了予定）。
+- Sarashina は日本国内からのアクセスが前提（国外・VPN 経由だと 403 になりうる）。レート制限は 30 回/分（nano は 60）。
+- ToDo ツールと「本人の発話だけ送る」ゲートは両方で共通。精度・速度の比較は後で行う（同じ発話を両方に送って比べる）。
 
 ## 使い方
 ```bash
@@ -20,9 +28,11 @@ cd poc/agent-cli
 uv sync
 uv run earagent -v            # 対話モード（-v で使用ツール・時間・トークンを表示）
 uv run earagent -p "明日の9時に歯医者に電話する"   # 1 回だけ
+uv run earagent --provider sarashina -v                         # Sarashina で対話
+uv run earagent --provider sarashina --model sarashina3-nano -v  # 軽量モデル
 uv run pytest                 # テスト（API は呼ばない）
 ```
-API キーはリポジトリ直下の `.env` の `ANTHROPIC_API_KEY` から読む。
+API キーはリポジトリ直下の `.env` から読む（`ANTHROPIC_API_KEY` / `SARASHINA_API_KEY`）。
 
 対話モードのコマンド:
 

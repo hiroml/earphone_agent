@@ -185,27 +185,33 @@ class VoiceAgent:
     # ---- クライアントツール ----
 
     def _run_tool(self, tool_use_id: str, name: str, args: Any) -> dict[str, Any]:
-        try:
-            if not isinstance(args, dict):
-                raise ValueError("ツール入力が不正です")
-            content = self._dispatch(name, args)
-            is_error = False
-        except (ValueError, TodoNotFoundError) as e:
-            content = f"エラー: {e}"
-            is_error = True
+        content, is_error = execute_todo_tool(self.todos, name, args)
         return {"type": "tool_result", "tool_use_id": tool_use_id, "content": content, "is_error": is_error}
 
-    def _dispatch(self, name: str, args: dict[str, Any]) -> str:
-        if name == "add_todo":
-            todo = self.todos.add(args["title"], due=args.get("due"), note=args.get("note"))
-            return json.dumps(asdict(todo), ensure_ascii=False)
-        if name == "list_todos":
-            todos = self.todos.list(include_done=bool(args.get("include_done", False)))
-            return json.dumps([asdict(t) for t in todos], ensure_ascii=False) if todos else "ToDo はありません。"
-        if name == "complete_todo":
-            try:
-                todo = self.todos.complete(int(args["todo_id"]))
-            except TodoNotFoundError:
-                raise TodoNotFoundError(f"id={args['todo_id']} の ToDo は見つかりません") from None
-            return json.dumps(asdict(todo), ensure_ascii=False)
-        raise ValueError(f"未知のツール: {name}")
+
+def execute_todo_tool(store: TodoStore, name: str, args: Any) -> tuple[str, bool]:
+    """ToDo ツールを実行し (結果テキスト, エラーか) を返す。Claude / Sarashina 共通。"""
+    try:
+        if not isinstance(args, dict):
+            raise ValueError("ツール入力が不正です")
+        return _dispatch_todo(store, name, args), False
+    except (ValueError, KeyError, TypeError) as e:
+        if isinstance(e, TodoNotFoundError):
+            return f"エラー: {e.args[0]}", True
+        return f"エラー: {e}", True
+
+
+def _dispatch_todo(store: TodoStore, name: str, args: dict[str, Any]) -> str:
+    if name == "add_todo":
+        todo = store.add(args["title"], due=args.get("due"), note=args.get("note"))
+        return json.dumps(asdict(todo), ensure_ascii=False)
+    if name == "list_todos":
+        todos = store.list(include_done=bool(args.get("include_done", False)))
+        return json.dumps([asdict(t) for t in todos], ensure_ascii=False) if todos else "ToDo はありません。"
+    if name == "complete_todo":
+        try:
+            todo = store.complete(int(args["todo_id"]))
+        except TodoNotFoundError:
+            raise TodoNotFoundError(f"id={args['todo_id']} の ToDo は見つかりません") from None
+        return json.dumps(asdict(todo), ensure_ascii=False)
+    raise ValueError(f"未知のツール: {name}")

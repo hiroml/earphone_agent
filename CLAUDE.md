@@ -35,7 +35,7 @@
 | 音声取得 | **イヤホンのマイク** | BT HFP 経由のイヤホンマイク / スマホ内蔵マイク / 併用 |
 | VAD・ウェイクワード | **未決** | オンデバイス（Silero VAD, Porcupine 等） |
 | STT（音声認識） | **未決** | オンデバイス (Whisper 系, OS 標準) / クラウド |
-| LLM・エージェント | **Claude API** | Claude API（tool use）を第一候補 |
+| LLM・エージェント | **Claude API** | Claude API（tool use）を第一候補。比較用に Sarashina API（日本語特化）も試作に組み込み済み |
 | TTS（音声合成） | **未決** | OS 標準 / クラウド TTS |
 | バックエンド | **未決** | 不要（端末完結）/ 軽量 API サーバ |
 | 地図・経路 | **google map** | Google Maps / Apple MapKit / OSS |

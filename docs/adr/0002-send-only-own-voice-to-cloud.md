@@ -30,3 +30,4 @@
 - `earagent.utterance.may_send_to_cloud` で強制する（テストあり）。
 - 判定不能（UNKNOWN）は送らない側に倒す。
 - 話者判別の精度が低いと、本人の依頼が無視されることがある。iOS PoC で精度を測る。
+- 送信先のクラウド LLM には Sarashina API（SB Intuitions）も加わった（比較用）。同じゲートを通す。データ保持・学習利用の規約は未確認なので、本番で使う前に確認する。
