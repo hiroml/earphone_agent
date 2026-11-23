@@ -57,6 +57,8 @@ final class AudioMonitor: ObservableObject {
     private var notificationAuthRequested = false
     /// LiveTranscriber（iOS 26 専用型のため Any で保持）
     private var transcriberBox: AnyObject?
+    /// 現在の発話で最初の途中結果が出た時刻（確定までの遅れの計測用）
+    private var utteranceFirstVolatileAt: Date?
 
     static let heartbeatInterval: TimeInterval = 30
 
@@ -195,7 +197,8 @@ final class AudioMonitor: ObservableObject {
     private func startTranscriber() {
         finalTexts = []
         volatileText = ""
-        _ = processor.takeSegmentStats()
+        processor.clearHistory()
+        utteranceFirstVolatileAt = nil
         #if compiler(>=6.2)
         if #available(iOS 26.0, *) {
             let transcriber = LiveTranscriber()
@@ -245,17 +248,23 @@ final class AudioMonitor: ObservableObject {
     private func handleTranscript(text: String, isFinal: Bool) {
         guard isFinal else {
             volatileText = text
+            if utteranceFirstVolatileAt == nil {
+                utteranceFirstVolatileAt = Date()
+                processor.markUtteranceStart()
+            }
             return
         }
         volatileText = ""
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let stats = processor.takeSegmentStats()
+        let stats = processor.takeUtteranceStats()
+        let finalLag = utteranceFirstVolatileAt.map { Date().timeIntervalSince($0) } ?? -1
+        utteranceFirstVolatileAt = nil
         guard !trimmed.isEmpty else { return }
         finalTexts.append(trimmed)
         if finalTexts.count > 50 { finalTexts.removeFirst(finalTexts.count - 50) }
         let mean = stats.meanLoudDB.map { String(format: "%.1f", $0) } ?? "nil"
-        let msg = String(format: "final label=%@ peak=%.1f meanLoud=%@ loud=%.1fs span=%.1fs input=%@ chars=%d text=%@",
-                         speakerLabel.rawValue, stats.peakDB, mean, stats.loudSec, stats.totalSec,
+        let msg = String(format: "final label=%@ peak=%.1f meanLoud=%@ loud=%.1fs span=%.1fs lag=%.1fs input=%@ chars=%d text=%@",
+                         speakerLabel.rawValue, stats.peakDB, mean, stats.loudSec, stats.totalSec, finalLag,
                          inputDescription, trimmed.count, trimmed)
         logger.log("STT", msg)
     }

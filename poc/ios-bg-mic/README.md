@@ -137,7 +137,7 @@
 | `LIFECYCLE` | アプリ状態・画面ロック |
 | `NOTIFY` | 再開を促す通知 |
 | `MARK` | 手動マーカー |
-| `STT` | 文字起こし（`final label=… peak=… meanLoud=… text=…`） |
+| `STT` | 文字起こし（`final label=… peak=… meanLoud=… loud=… span=… lag=… text=…`）。音量は「最初の途中結果の 2 秒前〜確定」の範囲で集計。`lag` は最初の途中結果から確定までの秒数 |
 | `LABEL` | 話者ラベルの切り替え |
 
 エラーの例: `NSOSStatusErrorDomain#561145187 '!rec'` は **CannotStartRecording**（背面からの録音開始ブロック）を表す。

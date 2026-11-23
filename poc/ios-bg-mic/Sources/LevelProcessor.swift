@@ -9,7 +9,7 @@ final class LevelProcessor {
         let inSpeech: Bool
     }
 
-    /// 前回 takeSegmentStats() 以降の音量統計（文字起こしの確定結果と対応づけて話者判別の材料にする）
+    /// 1 発話ぶんの音量統計（文字起こしの確定結果と対応づけて話者判別の材料にする）
     struct SegmentStats {
         let peakDB: Float
         let meanLoudDB: Float?   // 閾値を超えたバッファの平均 dB（なければ nil）
@@ -23,11 +23,15 @@ final class LevelProcessor {
     /// 生バッファの受け渡し先（文字起こし用）。オーディオスレッドで呼ばれる。
     var onBuffer: ((AVAudioPCMBuffer) -> Void)?
 
-    private var accPeak: Float = -160
-    private var accLoudSum: Float = 0
-    private var accLoudCount = 0
-    private var accLoudSec: Double = 0
-    private var accTotalSec: Double = 0
+    /// 直近の (時刻, dB, 長さ) を保持するリングバッファ。発話区間の統計をさかのぼって計算するため
+    private struct LevelSample {
+        let time: TimeInterval
+        let db: Float
+        let duration: Double
+    }
+    private var history: [LevelSample] = []
+    private let historyWindow: TimeInterval = 120
+    private var utteranceStart: TimeInterval?
 
     func setBufferSink(_ sink: ((AVAudioPCMBuffer) -> Void)?) {
         lock.lock()
@@ -35,22 +39,53 @@ final class LevelProcessor {
         lock.unlock()
     }
 
-    func takeSegmentStats() -> SegmentStats {
+    /// 発話の開始を記録する（文字起こしの最初の途中結果が出たとき）。
+    /// 途中結果は話し始めより遅れて出るので、preRoll 秒さかのぼる。
+    func markUtteranceStart(preRoll: TimeInterval = 2.0) {
+        lock.lock()
+        if utteranceStart == nil {
+            utteranceStart = ProcessInfo.processInfo.systemUptime - preRoll
+        }
+        lock.unlock()
+    }
+
+    /// 発話開始（markUtteranceStart）から現在までの統計を返し、開始時刻をリセットする。
+    /// 開始が記録されていなければ直近 fallback 秒を使う。
+    func takeUtteranceStats(fallback: TimeInterval = 5.0) -> SegmentStats {
         lock.lock()
         defer {
-            accPeak = -160
-            accLoudSum = 0
-            accLoudCount = 0
-            accLoudSec = 0
-            accTotalSec = 0
+            utteranceStart = nil
             lock.unlock()
         }
+        let now = ProcessInfo.processInfo.systemUptime
+        let from = utteranceStart ?? (now - fallback)
+        var peak: Float = -160
+        var loudSum: Float = 0
+        var loudCount = 0
+        var loudSec = 0.0
+        var totalSec = 0.0
+        for sample in history where sample.time >= from {
+            peak = max(peak, sample.db)
+            totalSec += sample.duration
+            if sample.db > thresholdDB {
+                loudSum += sample.db
+                loudCount += 1
+                loudSec += sample.duration
+            }
+        }
         return SegmentStats(
-            peakDB: accPeak,
-            meanLoudDB: accLoudCount > 0 ? accLoudSum / Float(accLoudCount) : nil,
-            loudSec: accLoudSec,
-            totalSec: accTotalSec
+            peakDB: peak,
+            meanLoudDB: loudCount > 0 ? loudSum / Float(loudCount) : nil,
+            loudSec: loudSec,
+            totalSec: totalSec
         )
+    }
+
+    func clearHistory() {
+        lock.lock()
+        history.removeAll()
+        utteranceStart = nil
+        lock.unlock()
     }
 
     private let lock = NSLock()
@@ -102,12 +137,9 @@ final class LevelProcessor {
         lock.lock()
         bufferCount += 1
         lastDB = db
-        accPeak = max(accPeak, db)
-        accTotalSec += duration
-        if db > thresholdDB {
-            accLoudSum += db
-            accLoudCount += 1
-            accLoudSec += duration
+        history.append(LevelSample(time: now, db: db, duration: duration))
+        if let first = history.first, now - first.time > historyWindow + 10 {
+            history.removeAll { now - $0.time > historyWindow }
         }
         if db > thresholdDB {
             lastLoud = now
