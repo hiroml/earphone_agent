@@ -32,3 +32,4 @@
 
 ## 関連 ADR
 - [ADR-0001](adr/0001-record-architecture-decisions.md) アーキテクチャ決定を ADR で記録する
+- [ADR-0002](adr/0002-send-only-own-voice-to-cloud.md) クラウド LLM には本人の発話の文字起こしだけを送る（提案中）

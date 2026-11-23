@@ -93,6 +93,14 @@
 # typecheck: TBD
 ```
 
+### エージェント本体（テキスト試作）: `poc/agent-cli`（Python / uv）
+```bash
+cd poc/agent-cli
+uv sync              # 依存インストール
+uv run earagent -v   # 対話 CLI（API キーはリポジトリ直下の .env）
+uv run pytest        # テスト（API を呼ばない）
+```
+
 ### iOS のビルド環境（Mac なし）
 - 開発は Windows / WSL。Xcode はローカルに無い。
 - iOS のビルドは **GitHub Actions の macOS ランナー**（XcodeGen → xcodebuild → 未署名 IPA）で行う。インストールは Windows の **Sideloadly** で行う。
