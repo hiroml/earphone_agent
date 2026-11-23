@@ -5,7 +5,7 @@
 ## 未解決
 | # | 問い | 重要度 | 担当 / 調査メモ |
 |---|---|---|---|
-| Q2 | 市販 BT イヤホンのマイクをバックグラウンドで常時取得できるか（OS・審査） | 高 | 🟡 調査済・実機検証待ち → [research](research/2026-11-22-background-earbud-mic-capture.md)（iOS: 前面で開始すれば継続可、背面からの開始・中断後の再開は不可） |
+| Q2 | 市販 BT イヤホンのマイクをバックグラウンドで常時取得できるか（OS・審査） | 高 | 🟢 **実機で背面継続を確認**（21 分・STALL 0、2026-11-23）。残: 1h 以上の継続・電池・中断からの再開 → [research](research/2026-11-22-background-earbud-mic-capture.md)、[PoC 結果](../poc/ios-bg-mic/README.md#結果記録) |
 | Q3 | HFP 接続中の音楽再生品質低下をどう扱うか | 中 | 一部調査 → [research](research/2026-11-22-background-earbud-mic-capture.md) §5（iOS 26 + H2 AirPods の高品質録音で緩和の可能性） |
 | Q4 | STT はオンデバイスかクラウドか（日本語精度 vs 電池 vs コスト） | 高 | |
 | Q5 | 第三者の声を拾うことの法的・倫理的整理（同意、保存） | 高 | |
