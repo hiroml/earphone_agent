@@ -6,7 +6,7 @@
 
 ## ドキュメント
 - [ビジョン](docs/vision.md) / [要件](docs/requirements.md) / [アーキテクチャ](docs/architecture.md)
-- [ロードマップ](docs/roadmap.md) / [未決事項](docs/open-questions.md) / [用語集](docs/glossary.md)
+- [バックログ](docs/backlog.md) / [ロードマップ](docs/roadmap.md) / [未決事項](docs/open-questions.md) / [用語集](docs/glossary.md)
 - [ADR](docs/adr/) / [機能仕様](docs/specs/) / [調査メモ](docs/research/)
 
 ## 開発

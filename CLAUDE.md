@@ -71,6 +71,7 @@
 │   ├── requirements.md    # 機能・非機能要件
 │   ├── architecture.md    # アーキテクチャ（決定次第更新）
 │   ├── roadmap.md         # フェーズとマイルストーン
+│   ├── backlog.md         # 要望・課題の一覧（B-xx）
 │   ├── open-questions.md  # 未決事項・調査課題
 │   ├── glossary.md        # 用語集
 │   ├── adr/               # Architecture Decision Records
@@ -111,6 +112,7 @@
 - 新機能は着手前に **仕様を書く**（`/spec` スキル → `docs/specs/`）。
 - 調査結果は `docs/research/YYYY-MM-DD-<topic>.md` に残す（`/research` スキル）。出典 URL と調査日を必ず書く。
 - 未決事項が出たら `docs/open-questions.md` に追記する。
+- ユーザーの要望・課題は `docs/backlog.md` に集約する（ID `B-xx`）。作業を始める・終えるときは、状態を更新する。
 
 ### コード（スタック決定後に具体化）
 - 小さく動くものを優先。PoC は `poc/<topic>/` に置き、本体と混ぜない。
