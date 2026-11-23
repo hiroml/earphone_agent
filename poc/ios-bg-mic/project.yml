@@ -22,7 +22,8 @@ targets:
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
-        NSMicrophoneUsageDescription: "バックグラウンドでのマイク継続取得を検証するために使用します。音声そのものは保存せず、音量レベルのみ記録します。"
+        NSMicrophoneUsageDescription: "バックグラウンドでのマイク継続取得を検証するために使用します。音声そのものは保存せず、音量レベルと端末内で文字起こししたテキストのみ記録します。"
+        NSSpeechRecognitionUsageDescription: "話者判別の検証のため、端末内で音声を文字に変換します。音声や文字はサーバーに送信しません。"
         UIBackgroundModes:
           - audio
         # ログファイルを「ファイル」アプリから取り出せるようにする

@@ -21,6 +21,10 @@ final class AudioMonitor: ObservableObject {
     @Published private(set) var isInputMuted = false
     @Published private(set) var restartFailures = 0
     @Published private(set) var stallCount = 0
+    // 文字起こし
+    @Published private(set) var volatileText = ""
+    @Published private(set) var finalTexts: [String] = []
+    @Published private(set) var transcriberStatus = "未起動"
 
     // MARK: 設定（停止中のみ変更可）
     @Published var useHighQualityBluetooth = true
@@ -28,6 +32,14 @@ final class AudioMonitor: ObservableObject {
     @Published var useVoiceChatMode = false
     /// イヤホンのタップ操作（AVRCP）受信テスト。mixWithOthers が OFF のときのみ有効に働く。
     @Published var receiveRemoteCommands = false
+    /// 端末内文字起こし（iOS 26 SpeechAnalyzer）
+    @Published var enableTranscription = true
+    /// iPhone 本体マイクを使う（イヤホンは出力のみ A2DP）。周囲の声の拾いやすさ比較用
+    @Published var preferBuiltInMic = false
+    /// 正解ラベル（いま話しているのは誰か）。開始後も変更可
+    @Published var speakerLabel: SpeakerLabel = .selfVoice {
+        didSet { if speakerLabel != oldValue { logger.log("LABEL", speakerLabel.rawValue) } }
+    }
     @Published var vadThresholdDB: Float = -45 {
         didSet { processor.setThreshold(vadThresholdDB) }
     }
@@ -43,6 +55,8 @@ final class AudioMonitor: ObservableObject {
     private var engineConfigObserver: NSObjectProtocol?
     private var lastHeartbeatBufferCount = 0
     private var notificationAuthRequested = false
+    /// LiveTranscriber（iOS 26 専用型のため Any で保持）
+    private var transcriberBox: AnyObject?
 
     static let heartbeatInterval: TimeInterval = 30
 
@@ -72,10 +86,11 @@ final class AudioMonitor: ObservableObject {
         stallCount = 0
         speechSegments = 0
         sessionStart = Date()
-        logger.log("CONFIG", "hqBluetooth=\(useHighQualityBluetooth) mixWithOthers=\(mixWithOthers) voiceChatMode=\(useVoiceChatMode) remoteCommands=\(receiveRemoteCommands) vadThreshold=\(vadThresholdDB)")
+        logger.log("CONFIG", "hqBluetooth=\(useHighQualityBluetooth) mixWithOthers=\(mixWithOthers) voiceChatMode=\(useVoiceChatMode) remoteCommands=\(receiveRemoteCommands) vadThreshold=\(vadThresholdDB) stt=\(enableTranscription) builtInMic=\(preferBuiltInMic) label=\(speakerLabel.rawValue)")
         if receiveRemoteCommands && mixWithOthers {
             logger.log("CONFIG", "WARNING: mixWithOthers=ON のためリモコンコマンドは届かない見込み")
         }
+        if enableTranscription { startTranscriber() }
         start(trigger: "user")
         if receiveRemoteCommands { remoteProbe.enable() }
         startTimers()
@@ -85,6 +100,7 @@ final class AudioMonitor: ObservableObject {
         wantsListening = false
         remoteProbe.disable()
         stopEngine()
+        stopTranscriber()
         do {
             try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         } catch {
@@ -121,6 +137,7 @@ final class AudioMonitor: ObservableObject {
         let session = AVAudioSession.sharedInstance()
         var options: AVAudioSession.CategoryOptions = [.allowBluetooth]
         if mixWithOthers { options.insert(.mixWithOthers) }
+        if preferBuiltInMic { options.insert(.allowBluetoothA2DP) }
         #if compiler(>=6.2)
         if #available(iOS 26.0, *), useHighQualityBluetooth {
             options.insert(.bluetoothHighQualityRecording)
@@ -132,9 +149,15 @@ final class AudioMonitor: ObservableObject {
         // BT マイクがあれば明示的に優先する
         if let inputs = session.availableInputs {
             logger.log("ROUTE", "availableInputs=" + inputs.map { "\($0.portName)[\($0.portType.rawValue)]" }.joined(separator: ", "))
-            if let bt = inputs.first(where: { $0.portType == .bluetoothHFP || $0.portType == .bluetoothLE }) {
+            let preferred: AVAudioSessionPortDescription?
+            if preferBuiltInMic {
+                preferred = inputs.first(where: { $0.portType == .builtInMic })
+            } else {
+                preferred = inputs.first(where: { $0.portType == .bluetoothHFP || $0.portType == .bluetoothLE })
+            }
+            if let preferred {
                 do {
-                    try session.setPreferredInput(bt)
+                    try session.setPreferredInput(preferred)
                 } catch {
                     logger.log("ROUTE", "setPreferredInput failed \(Self.describe(error))")
                 }
@@ -165,6 +188,76 @@ final class AudioMonitor: ObservableObject {
         if engine.isRunning { engine.stop() }
         isRunning = false
         inSpeech = false
+    }
+
+    // MARK: - 文字起こし
+
+    private func startTranscriber() {
+        finalTexts = []
+        volatileText = ""
+        _ = processor.takeSegmentStats()
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            let transcriber = LiveTranscriber()
+            transcriber.onLog = { [weak self] msg in
+                DispatchQueue.main.async { self?.logger.log("STT", msg) }
+            }
+            transcriber.onResult = { [weak self] result in
+                DispatchQueue.main.async { self?.handleTranscript(text: result.text, isFinal: result.isFinal) }
+            }
+            transcriberBox = transcriber
+            processor.setBufferSink { buffer in transcriber.append(buffer) }
+            transcriberStatus = "準備中"
+            Task { [weak self] in
+                do {
+                    let locale = try await transcriber.prepare()
+                    DispatchQueue.main.async {
+                        self?.transcriberStatus = "動作中 (\(locale))"
+                        self?.logger.log("STT", "started locale=\(locale)")
+                    }
+                } catch {
+                    DispatchQueue.main.async {
+                        self?.transcriberStatus = "失敗"
+                        self?.logger.log("STT", "start FAILED \(Self.describe(error))")
+                    }
+                }
+            }
+            return
+        }
+        #endif
+        transcriberStatus = "非対応（iOS 26 / Xcode 26 が必要）"
+        logger.log("STT", "unavailable on this build/OS")
+    }
+
+    private func stopTranscriber() {
+        processor.setBufferSink(nil)
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *), let transcriber = transcriberBox as? LiveTranscriber {
+            transcriber.stop()
+        }
+        #endif
+        transcriberBox = nil
+        transcriberStatus = "停止"
+        logger.log("STT", "stopped finals=\(finalTexts.count)")
+    }
+
+    /// 確定結果ごとに、その間の音量統計と正解ラベルを記録する（話者判別の分析用）
+    private func handleTranscript(text: String, isFinal: Bool) {
+        guard isFinal else {
+            volatileText = text
+            return
+        }
+        volatileText = ""
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let stats = processor.takeSegmentStats()
+        guard !trimmed.isEmpty else { return }
+        finalTexts.append(trimmed)
+        if finalTexts.count > 50 { finalTexts.removeFirst(finalTexts.count - 50) }
+        let mean = stats.meanLoudDB.map { String(format: "%.1f", $0) } ?? "nil"
+        let msg = String(format: "final label=%@ peak=%.1f meanLoud=%@ loud=%.1fs span=%.1fs input=%@ chars=%d text=%@",
+                         speakerLabel.rawValue, stats.peakDB, mean, stats.loudSec, stats.totalSec,
+                         inputDescription, trimmed.count, trimmed)
+        logger.log("STT", msg)
     }
 
     private func restart(trigger: String) {
@@ -460,6 +553,27 @@ enum PoCError: LocalizedError {
         switch self {
         case let .invalidInputFormat(sr, ch):
             return "入力フォーマットが無効です (sampleRate=\(sr), channels=\(ch))。マイク権限や経路を確認してください。"
+        }
+    }
+}
+
+/// 話者の正解ラベル（検証用に手動で切り替える）
+enum SpeakerLabel: String, CaseIterable, Identifiable {
+    case selfVoice = "self"
+    case other = "other"
+    case tv = "tv"
+    case mixed = "mixed"
+    case silence = "silence"
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .selfVoice: return "自分"
+        case .other: return "他人"
+        case .tv: return "TV等"
+        case .mixed: return "混在"
+        case .silence: return "無音"
         }
     }
 }

@@ -10,6 +10,7 @@ struct ContentView: View {
             Form {
                 statusSection
                 controlSection
+                transcriptionSection
                 settingsSection
                 markerSection
                 logSection
@@ -75,10 +76,38 @@ struct ContentView: View {
         }
     }
 
+    // MARK: 文字起こし・話者ラベル
+
+    private var transcriptionSection: some View {
+        Section {
+            Picker("いま話しているのは", selection: $monitor.speakerLabel) {
+                ForEach(SpeakerLabel.allCases) { label in
+                    Text(label.displayName).tag(label)
+                }
+            }
+            .pickerStyle(.segmented)
+            LabeledContent("文字起こし", value: monitor.transcriberStatus)
+            if !monitor.volatileText.isEmpty {
+                Text(monitor.volatileText)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(Array(monitor.finalTexts.suffix(5).reversed().enumerated()), id: \.offset) { _, text in
+                Text(text).font(.callout)
+            }
+        } header: {
+            Text("文字起こし・話者ラベル")
+        } footer: {
+            Text("話者を切り替えたらすぐにラベルを変えてください。確定した文ごとに、音量とラベルがログに残ります。第三者に話してもらう場合は事前に同意を得てください。")
+        }
+    }
+
     // MARK: 設定
 
     private var settingsSection: some View {
         Section("設定（停止中のみ変更可）") {
+            Toggle("端末内文字起こし（iOS 26）", isOn: $monitor.enableTranscription)
+            Toggle("iPhone 本体マイクを使う", isOn: $monitor.preferBuiltInMic)
             Toggle("BT 高品質録音（iOS 26+ / H2 AirPods）", isOn: $monitor.useHighQualityBluetooth)
             Toggle("他アプリの音と混ぜる（mixWithOthers）", isOn: $monitor.mixWithOthers)
             Toggle("voiceChat モード（エコーキャンセル）", isOn: $monitor.useVoiceChatMode)
@@ -131,6 +160,7 @@ struct ContentView: View {
         case "ROUTE", "ENGINE": return .purple
         case "MUTE", "REMOTE": return .orange
         case "VAD": return .green
+        case "STT", "LABEL": return .teal
         default: return .primary
         }
     }

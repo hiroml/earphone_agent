@@ -26,6 +26,9 @@ jobs:
           echo "Using $XCODE"
           sudo xcode-select -s "$XCODE"
           xcodebuild -version
+          # SpeechAnalyzer（iOS 26 SDK）が無いと文字起こし無しでビルドされてしまうため、Xcode 26 未満は失敗させる
+          MAJOR=$(xcodebuild -version | head -1 | awk '{print $2}' | cut -d. -f1)
+          if [ "$MAJOR" -lt 26 ]; then echo "::error::Xcode 26 以上が必要です（検出: $MAJOR）"; exit 1; fi
 
       - name: Install XcodeGen
         run: brew install xcodegen
